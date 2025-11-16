@@ -561,7 +561,7 @@ export default function HomePage() {
           text: data.error || "요청 실패",
         });
       }
-    } catch (error) {
+    } catch {
       setDocRequestMessage({
         type: "error",
         text: "요청 중 오류가 발생했습니다.",
@@ -1008,7 +1008,6 @@ export default function HomePage() {
                   ))
                 )}
               </div>
-
             </div>
 
             {/* 문서 정보 요청 카드 */}
@@ -1121,7 +1120,6 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
-          </div>
 
             {/* 알림 + 새 업무 추가 */}
             <div

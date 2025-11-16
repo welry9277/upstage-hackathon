@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nrefactor: redesign document request as Q&A workflow\n\nChange document request flow from keyword search to question-based workflow:\n\nBefore:\n- User enters search keyword\n- User enters approver email (text input)\n- System searches and sends results\n\nAfter:\n- User enters question/information needed (textarea)\n- User selects approver from dropdown\n- Question is sent to approver\n- Approver searches documents and decides to share\n\nChanges:\n- Replace keyword input with question textarea\n- Change approver input from email to dropdown select\n- Add approver options (existing assignees + departments)\n- Separate document request card from task log card\n- Update UI messaging to reflect Q&A flow\n- Auto-generate approver email from selected name\n\nUI:\n- Question textarea with placeholder example\n- Dropdown with담당자 options (도현, 홍길동, 재무팀, etc.)\n- Clearer labels and descriptions\n- Better visual hierarchy\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(npm run build:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

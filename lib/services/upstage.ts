@@ -27,11 +27,11 @@ export class UpstageService {
       const formData = new FormData();
 
       if (file instanceof Buffer) {
-        const blob = new Blob([file], {
+        const blob = new Blob([new Uint8Array(file)], {
           type: this.getMimeType(fileName)
         });
         formData.append('document', blob, fileName);
-      } else {
+      } else if (file instanceof File) {
         formData.append('document', file, fileName);
       }
 
