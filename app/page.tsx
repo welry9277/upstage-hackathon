@@ -622,7 +622,7 @@ export default function HomePage() {
           const isImportant = t.isImportant || false;
 
           // 중요 업무일 때 더 진한 테두리 색상
-          let importantBorderColor: string;
+          let importantBorderColor: string = borderColor; // 기본값 설정
           if (isImportant) {
             // 상태별로 중요 업무 테두리 색상을 더 진하게 설정
             switch (t.status) {
