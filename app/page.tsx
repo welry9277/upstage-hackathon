@@ -330,6 +330,38 @@ export default function HomePage() {
           const dimOthers =
             highlightedNodeIds.size > 0 && !isHighlighted;
 
+          // 상태별 배경색 설정
+          let backgroundColor: string;
+          let borderColor: string;
+
+          if (isHighlighted) {
+            // 하이라이트된 경우 기존 파란색 유지
+            backgroundColor = "linear-gradient(135deg, #2563eb, #4f46e5)";
+            borderColor = "rgba(191,219,254,0.9)";
+          } else {
+            // 상태별 색상
+            switch (t.status) {
+              case "TODO":
+                backgroundColor = "#f3f4f6"; // 옅은 회색
+                borderColor = "rgba(209,213,219,0.8)";
+                break;
+              case "IN_PROGRESS":
+                backgroundColor = "#dbeafe"; // 옅은 하늘색
+                borderColor = "rgba(147,197,253,0.8)";
+                break;
+              case "DONE":
+                backgroundColor = "#d1fae5"; // 옅은 초록색
+                borderColor = "rgba(110,231,183,0.8)";
+                break;
+              default:
+                backgroundColor = "#0f172a";
+                borderColor = "rgba(148,163,184,0.5)";
+            }
+          }
+
+          // 텍스트 색상 (밝은 배경에는 어두운 텍스트)
+          const textColor = isHighlighted ? "#e5e7eb" : "#111827";
+
           nodes.push({
             id: t.id,
             position: { x: idx * xGap, y: lv * yGap },
@@ -337,14 +369,12 @@ export default function HomePage() {
             style: {
               borderRadius: 999,
               padding: "6px 14px",
-              background: isHighlighted
-                ? "linear-gradient(135deg, #2563eb, #4f46e5)"
-                : "#0f172a",
-              color: "#e5e7eb",
+              background: backgroundColor,
+              color: textColor,
               fontSize: 12,
               border: isHighlighted
-                ? "2px solid rgba(191,219,254,0.9)"
-                : "1px solid rgba(148,163,184,0.5)",
+                ? `2px solid ${borderColor}`
+                : `1px solid ${borderColor}`,
               boxShadow: isHighlighted
                 ? "0 0 0 1px rgba(191,219,254,0.4), 0 10px 25px rgba(15,23,42,0.7)"
                 : "0 8px 18px rgba(15,23,42,0.6)",
