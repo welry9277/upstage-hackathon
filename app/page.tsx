@@ -908,7 +908,7 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* 하단: 좌 로그, 우 알림+업무추가 */}
+          {/* 하단: 좌 (로그+문서요청), 우 (알림+업무추가) */}
           <div
             style={{
               display: "flex",
@@ -917,17 +917,27 @@ export default function HomePage() {
               minHeight: 0,
             }}
           >
-            {/* 로그 */}
+            {/* 왼쪽 컬럼: 로그 + 문서요청 */}
             <div
               style={{
-                ...cardStyle,
                 flex: 1,
-                padding: 14,
                 display: "flex",
                 flexDirection: "column",
+                gap: 12,
                 minHeight: 0,
               }}
             >
+              {/* 업무 로그 */}
+              <div
+                style={{
+                  ...cardStyle,
+                  flex: 1,
+                  padding: 14,
+                  display: "flex",
+                  flexDirection: "column",
+                  minHeight: 0,
+                }}
+              >
               <div style={sectionTitleStyle}>업무 로그</div>
               {selectedTask && (
                 <>
@@ -1008,19 +1018,15 @@ export default function HomePage() {
                   ))
                 )}
               </div>
-            </div>
+              </div>
 
-            {/* 문서 정보 요청 카드 */}
-            <div
-              style={{
-                ...cardStyle,
-                flex: 1,
-                padding: 14,
-                display: "flex",
-                flexDirection: "column",
-                minHeight: 0,
-              }}
-            >
+              {/* 문서 정보 요청 카드 */}
+              <div
+                style={{
+                  ...cardStyle,
+                  padding: 14,
+                }}
+              >
               <div style={sectionTitleStyle}>문서 정보 요청</div>
               <p style={{ fontSize: 11, color: "#6b7280", margin: "4px 0 10px" }}>
                 다른 부서에 문서 내용을 질문하세요
@@ -1119,9 +1125,10 @@ export default function HomePage() {
                   {isSubmittingDocRequest ? "전송 중..." : "질문 전송"}
                 </button>
               </div>
+              </div>
             </div>
 
-            {/* 알림 + 새 업무 추가 */}
+            {/* 오른쪽 컬럼: 알림 + 새 업무 추가 */}
             <div
               style={{
                 flex: 1,
