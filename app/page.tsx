@@ -183,6 +183,10 @@ export default function HomePage() {
 
   const [logsByTask, setLogsByTask] = useState<Record<string, TaskLog[]>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  
+  // 알림 필터링 상태
+  type NotificationFilter = "all" | "important" | "my_tasks" | "doc_requests" | "completed";
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
 
   const assigneeOptions = Array.from(
     new Set(
@@ -363,11 +367,43 @@ export default function HomePage() {
               highlightShadowColor = "rgba(148,163,184,0.25)";
           }
 
+          // 중요 업무 여부 확인
+          const isImportant = t.isImportant || false;
+
+          // 중요 업무일 때 더 진한 테두리 색상
+          let importantBorderColor: string;
+          if (isImportant) {
+            // 상태별로 중요 업무 테두리 색상을 더 진하게 설정
+            switch (t.status) {
+              case "TODO":
+                importantBorderColor = "rgba(107,114,128,1)"; // 진한 회색
+                break;
+              case "IN_PROGRESS":
+                importantBorderColor = "rgba(37,99,235,1)"; // 진한 파란색
+                break;
+              case "DONE":
+                importantBorderColor = "rgba(22,163,74,1)"; // 진한 초록색
+                break;
+              default:
+                importantBorderColor = "rgba(148,163,184,1)";
+            }
+          }
+
           // 하이라이트 시 사용할 테두리 색상
-          const finalBorderColor = isHighlighted ? highlightBorderColor : borderColor;
+          const finalBorderColor = isImportant 
+            ? importantBorderColor 
+            : (isHighlighted ? highlightBorderColor : borderColor);
 
           // 텍스트 색상 (밝은 배경에는 어두운 텍스트)
           const textColor = "#111827"; // 상태 색상이 밝으므로 항상 어두운 텍스트
+
+          // 테두리 두께 결정 (중요 업무 > 하이라이트 > 일반)
+          let borderWidth = 1;
+          if (isImportant) {
+            borderWidth = 4; // 중요 업무는 더 두껍게 (3px → 4px)
+          } else if (isHighlighted) {
+            borderWidth = 2; // 하이라이트는 중간
+          }
 
           // 노드 스타일 객체 생성
           const nodeStyle: React.CSSProperties = {
@@ -376,14 +412,14 @@ export default function HomePage() {
             backgroundColor: backgroundColor, // 상태별 색상 유지
             color: textColor,
             fontSize: 12,
-            border: isHighlighted
-              ? `2px solid ${finalBorderColor}` // 하이라이트 시 더 두꺼운 테두리
-              : `1px solid ${finalBorderColor}`,
+            border: `${borderWidth}px solid ${finalBorderColor}`,
             boxShadow: isHighlighted
               ? `0 0 0 2px ${highlightShadowColor}, 0 10px 25px rgba(15,23,42,0.7)` // 하이라이트 시 강한 그림자
+              : isImportant
+              ? `0 0 0 2px ${finalBorderColor}30, 0 8px 20px rgba(15,23,42,0.7)` // 중요 업무는 더 강한 그림자
               : "0 8px 18px rgba(15,23,42,0.6)",
             opacity: dimOthers ? 0.3 : 1,
-            fontWeight: isHighlighted ? 600 : 500, // 하이라이트 시 더 굵게
+            fontWeight: isHighlighted || isImportant ? 600 : 500, // 하이라이트 또는 중요 업무 시 더 굵게
             cursor: "pointer",
           };
 
@@ -779,9 +815,52 @@ export default function HomePage() {
     }
   };
 
-  const userNotifications = notifications.filter(
-    (n) => n.userId === currentUser
-  );
+  // 사용자 알림 필터링
+  const userNotifications = useMemo(() => {
+    return notifications.filter((n) => n.userId === currentUser);
+  }, [notifications, currentUser]);
+
+  // 필터링된 알림
+  const filteredNotifications = useMemo(() => {
+    let filtered = userNotifications;
+
+    switch (notificationFilter) {
+      case "important":
+        // 중요 업무만 필터링
+        filtered = filtered.filter((n) => {
+          if (!n.taskId) return false;
+          const task = tasks.find((t) => t.id === n.taskId);
+          return task?.isImportant === true;
+        });
+        break;
+      case "my_tasks":
+        // 내 담당 업무만
+        filtered = filtered.filter((n) => {
+          if (!n.taskId) return false;
+          const task = tasks.find((t) => t.id === n.taskId);
+          return task?.assignee === currentUser;
+        });
+        break;
+      case "doc_requests":
+        // 문서 요청만
+        filtered = filtered.filter((n) => n.type === "document_request");
+        break;
+      case "completed":
+        // 작업 완료만
+        filtered = filtered.filter((n) => {
+          if (!n.taskId) return false;
+          const task = tasks.find((t) => t.id === n.taskId);
+          return task?.status === "DONE";
+        });
+        break;
+      case "all":
+      default:
+        // 모든 알림 (필터링 없음)
+        break;
+    }
+
+    return filtered;
+  }, [userNotifications, notificationFilter, tasks, currentUser]);
 
   // ---- 렌더링 ----
 
@@ -1033,6 +1112,38 @@ export default function HomePage() {
                       >
                         {selectedTask.assignee ?? "미지정"}
                       </span>
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        onClick={() => {
+                          const newIsImportant = !selectedTask.isImportant;
+                          setTasks((prev) =>
+                            prev.map((t) =>
+                              t.id === selectedTask.id
+                                ? { ...t, isImportant: newIsImportant, updatedAt: nowIso() }
+                                : t
+                            )
+                          );
+                        }}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 6,
+                          border: selectedTask.isImportant
+                            ? "2px solid #f59e0b"
+                            : "1px solid #e5e7eb",
+                          background: selectedTask.isImportant ? "#fef3c7" : "white",
+                          color: selectedTask.isImportant ? "#d97706" : "#6b7280",
+                          fontSize: 12,
+                          fontWeight: selectedTask.isImportant ? 600 : 500,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {selectedTask.isImportant ? "⭐" : "☆"} 
+                        {selectedTask.isImportant ? "중요 업무 해제" : "중요 업무로 설정"}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1526,8 +1637,29 @@ export default function HomePage() {
                   flexDirection: "column",
                 }}
               >
-                <div style={sectionTitleStyle}>
-                  내 알림 <span style={{ color: "#6b7280" }}>(for {currentUser})</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={sectionTitleStyle}>
+                    내 알림 <span style={{ color: "#6b7280" }}>(for {currentUser})</span>
+                  </div>
+                  <select
+                    value={notificationFilter}
+                    onChange={(e) => setNotificationFilter(e.target.value as NotificationFilter)}
+                    style={{
+                      borderRadius: 6,
+                      border: "1px solid #e5e7eb",
+                      padding: "4px 8px",
+                      fontSize: 11,
+                      background: "white",
+                      color: "#374151",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="all">모든 알림</option>
+                    <option value="important">중요 업무만</option>
+                    <option value="my_tasks">내 담당 업무만</option>
+                    <option value="doc_requests">문서 요청만</option>
+                    <option value="completed">작업 완료만</option>
+                  </select>
                 </div>
                 <div
                   style={{
@@ -1537,12 +1669,14 @@ export default function HomePage() {
                     paddingRight: 4,
                   }}
                 >
-                  {userNotifications.length === 0 ? (
+                  {filteredNotifications.length === 0 ? (
                     <p style={{ fontSize: 12, color: "#9ca3af" }}>
-                      아직 {currentUser}에게 온 알림이 없습니다.
+                      {userNotifications.length === 0
+                        ? `아직 ${currentUser}에게 온 알림이 없습니다.`
+                        : "선택한 필터에 해당하는 알림이 없습니다."}
                     </p>
                   ) : (
-                    userNotifications.map((n) => (
+                    filteredNotifications.map((n) => (
                       <div
                         key={n.id}
                         onClick={() => {

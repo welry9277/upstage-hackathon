@@ -9,6 +9,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   assignee?: string;     // 담당자 이름 (간단하게 string으로)
+  isImportant?: boolean; // 중요 업무 여부
   createdAt: string;     // ISO
   updatedAt: string;     // ISO
 }
