@@ -68,6 +68,16 @@ export interface DocumentSource {
   selected: boolean;
 }
 
+export interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+  status: "active" | "invited" | "pending";
+  invitedAt: string; // ISO
+  joinedAt?: string; // ISO
+}
+
 /**
  * n8n Webhook으로 넘길 페이로드 형태
  */

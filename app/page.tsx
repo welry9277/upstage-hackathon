@@ -11,6 +11,7 @@ import ReactFlow, {
   Handle,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import emailjs from "@emailjs/browser";
 
 import {
   Task,
@@ -21,6 +22,7 @@ import {
   Notification,
   WebhookPayload,
   Board,
+  TeamMember,
 } from "./types";
 
 // Custom Node Component with Handles
@@ -384,6 +386,26 @@ export default function HomePage() {
   const [selectedDocRequest, setSelectedDocRequest] = useState<Notification | null>(null);
   const [docAnswer, setDocAnswer] = useState("");
   const [searchedDocs, setSearchedDocs] = useState<any[]>([]);
+
+  // 팀원 관리 상태
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem("teamMembers");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // 팀원 목록 localStorage에 저장
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("teamMembers", JSON.stringify(teamMembers));
+  }, [teamMembers]);
 
   // 자동 답변 생성 함수
   const generateAutoAnswer = (question: string) => {
@@ -1101,6 +1123,82 @@ export default function HomePage() {
     setSelectedId(null);
   };
 
+  // ---- 팀원 초대 ----
+
+  const handleInviteTeamMember = async () => {
+    if (!inviteEmail.trim()) {
+      alert("이메일 주소를 입력해주세요.");
+      return;
+    }
+
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(inviteEmail)) {
+      alert("올바른 이메일 주소를 입력해주세요.");
+      return;
+    }
+
+    // 이미 초대된 이메일인지 확인
+    if (teamMembers.some((member) => member.email === inviteEmail)) {
+      alert("이미 초대된 팀원입니다.");
+      return;
+    }
+
+    const now = new Date();
+    const newMember: TeamMember = {
+      id: `member-${now.getTime()}`,
+      email: inviteEmail,
+      name: inviteName.trim() || inviteEmail.split("@")[0],
+      role: "member",
+      status: "invited",
+      invitedAt: now.toISOString(),
+    };
+
+    // EmailJS 설정 확인
+    const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
+    const templateId = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
+    const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+
+    // EmailJS가 설정되어 있으면 실제 이메일 발송
+    if (serviceId && templateId && publicKey) {
+      try {
+        const templateParams = {
+          to_email: inviteEmail,
+          to_name: inviteName.trim() || inviteEmail.split("@")[0],
+          invite_link: `${window.location.origin}?invite=${newMember.id}`,
+          app_name: "NodeTask - 협업 작업 관리",
+        };
+
+        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+
+        setTeamMembers((prev) => [...prev, newMember]);
+        alert(`${inviteEmail}로 초대 이메일이 발송되었습니다!`);
+      } catch (error) {
+        console.error("이메일 발송 실패:", error);
+        alert("이메일 발송에 실패했습니다. 설정을 확인해주세요.");
+        return;
+      }
+    } else {
+      // EmailJS가 설정되지 않았으면 시뮬레이션 모드
+      setTeamMembers((prev) => [...prev, newMember]);
+      alert(`${inviteEmail}로 초대 이메일이 발송되었습니다. (시뮬레이션 모드)\n\nEmailJS를 설정하면 실제 이메일이 발송됩니다.`);
+    }
+
+    // 입력 필드 초기화
+    setInviteEmail("");
+    setInviteName("");
+    setShowInviteModal(false);
+  };
+
+  const handleRemoveTeamMember = (memberId: string) => {
+    const member = teamMembers.find((m) => m.id === memberId);
+    if (!member) return;
+
+    if (window.confirm(`${member.email}을(를) 팀에서 제거하시겠습니까?`)) {
+      setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+    }
+  };
+
   // ---- 문서 정보 요청 제출 ----
 
   const handleDocumentRequest = async () => {
@@ -1304,6 +1402,20 @@ export default function HomePage() {
                 }}
               >
                 + 새 보드
+              </button>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  background: "rgba(34,197,94,0.2)",
+                  color: "#86efac",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                👥 팀원 초대
               </button>
               <button
                 onClick={handleRenameBoard}
@@ -2724,6 +2836,175 @@ export default function HomePage() {
                 💡 체크박스를 선택하면 해당 문서가 답변의 근거로 포함됩니다.
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 팀원 초대 모달 */}
+      {showInviteModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+          onClick={() => setShowInviteModal(false)}
+        >
+          <div
+            style={{
+              ...cardStyle,
+              width: 500,
+              maxWidth: "90vw",
+              padding: 24,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+              팀원 초대
+            </h2>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                이메일 주소 *
+              </label>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="example@gmail.com"
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 13,
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") handleInviteTeamMember();
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                이름 (선택사항)
+              </label>
+              <input
+                type="text"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                placeholder="홍길동"
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 13,
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") handleInviteTeamMember();
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 16, padding: 10, background: "#f9fafb", borderRadius: 6 }}>
+              💡 초대 이메일이 발송됩니다. (현재는 시뮬레이션으로 목록에만 추가됩니다)
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleInviteTeamMember}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#3b82f6",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                초대 보내기
+              </button>
+            </div>
+
+            {/* 현재 팀원 목록 */}
+            {teamMembers.length > 0 && (
+              <div style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                  팀원 목록 ({teamMembers.length}명)
+                </h3>
+                <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                  {teamMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: 8,
+                        borderRadius: 6,
+                        background: "#f9fafb",
+                        marginBottom: 6,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{member.name}</div>
+                        <div style={{ fontSize: 11, color: "#6b7280" }}>{member.email}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 8px",
+                            borderRadius: 999,
+                            background: member.status === "invited" ? "#fef3c7" : "#d1fae5",
+                            color: member.status === "invited" ? "#d97706" : "#15803d",
+                          }}
+                        >
+                          {member.status === "invited" ? "초대됨" : "활성"}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveTeamMember(member.id)}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 4,
+                            border: "1px solid #fecaca",
+                            background: "white",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: 11,
+                          }}
+                        >
+                          제거
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
