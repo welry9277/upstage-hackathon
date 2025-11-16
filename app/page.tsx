@@ -204,6 +204,15 @@ export default function HomePage() {
 
   const [logDraft, setLogDraft] = useState("");
 
+  // 문서 요청 상태
+  const [docRequestKeyword, setDocRequestKeyword] = useState("");
+  const [docRequestApprover, setDocRequestApprover] = useState("");
+  const [docRequestMessage, setDocRequestMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [isSubmittingDocRequest, setIsSubmittingDocRequest] = useState(false);
+
   const selectedTask: Task | null =
     tasks.find((t) => t.id === selectedId) ?? null;
 
@@ -503,6 +512,58 @@ export default function HomePage() {
     setNewParentId("");
     setNewRelationType("NONE");
     setSelectedId(newId);
+  };
+
+  // ---- 문서 요청 제출 ----
+
+  const handleDocumentRequest = async () => {
+    if (!docRequestKeyword.trim() || !docRequestApprover.trim()) {
+      setDocRequestMessage({
+        type: "error",
+        text: "검색 키워드와 승인자 이메일을 입력해주세요.",
+      });
+      return;
+    }
+
+    setIsSubmittingDocRequest(true);
+    setDocRequestMessage(null);
+
+    try {
+      const response = await fetch("/api/documents/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requester_email: `${currentUser.toLowerCase().replace(/\s+/g, "")}@company.com`,
+          requester_department: "개발팀",
+          keyword: docRequestKeyword,
+          approver_email: docRequestApprover,
+          urgency: "normal",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setDocRequestMessage({
+          type: "success",
+          text: `요청 완료! ${data.matchingDocuments}개 문서 발견. 승인자에게 알림 전송됨.`,
+        });
+        setDocRequestKeyword("");
+        setDocRequestApprover("");
+      } else {
+        setDocRequestMessage({
+          type: "error",
+          text: data.error || "요청 실패",
+        });
+      }
+    } catch (error) {
+      setDocRequestMessage({
+        type: "error",
+        text: "요청 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setIsSubmittingDocRequest(false);
+    }
   };
 
   const userNotifications = notifications.filter(
@@ -941,6 +1002,97 @@ export default function HomePage() {
                     </div>
                   ))
                 )}
+              </div>
+
+              {/* 문서 요청 카드 */}
+              <div
+                style={{
+                  ...cardStyle,
+                  padding: 14,
+                  marginTop: 12,
+                }}
+              >
+                <div style={sectionTitleStyle}>문서 요청</div>
+                <p style={{ fontSize: 11, color: "#6b7280", margin: "4px 0 8px" }}>
+                  다른 부서의 문서가 필요할 때 요청하세요
+                </p>
+
+                {docRequestMessage && (
+                  <div
+                    style={{
+                      padding: 8,
+                      borderRadius: 8,
+                      marginBottom: 8,
+                      fontSize: 11,
+                      background:
+                        docRequestMessage.type === "success"
+                          ? "rgba(16, 185, 129, 0.1)"
+                          : "rgba(239, 68, 68, 0.1)",
+                      color:
+                        docRequestMessage.type === "success"
+                          ? "#065f46"
+                          : "#991b1b",
+                      border: `1px solid ${
+                        docRequestMessage.type === "success" ? "#10b981" : "#ef4444"
+                      }`,
+                    }}
+                  >
+                    {docRequestMessage.text}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <input
+                    value={docRequestKeyword}
+                    onChange={(e) => setDocRequestKeyword(e.target.value)}
+                    placeholder="검색 키워드 (예: 예산, 프로젝트)"
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      padding: "6px 8px",
+                      fontSize: 12,
+                      outline: "none",
+                    }}
+                  />
+                  <input
+                    value={docRequestApprover}
+                    onChange={(e) => setDocRequestApprover(e.target.value)}
+                    placeholder="승인자 이메일"
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      padding: "6px 8px",
+                      fontSize: 12,
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={handleDocumentRequest}
+                    disabled={isSubmittingDocRequest}
+                    style={{
+                      marginTop: 2,
+                      alignSelf: "flex-end",
+                      border: "none",
+                      borderRadius: 999,
+                      padding: "5px 14px",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      background: isSubmittingDocRequest
+                        ? "#9ca3af"
+                        : "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+                      color: "white",
+                      cursor: isSubmittingDocRequest ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isSubmittingDocRequest ? "요청 중..." : "문서 요청"}
+                  </button>
+                </div>
               </div>
             </div>
 
