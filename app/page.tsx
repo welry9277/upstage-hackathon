@@ -204,6 +204,14 @@ export default function HomePage() {
 
   const [logDraft, setLogDraft] = useState("");
 
+  // 업무 수정 상태
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editAssignee, setEditAssignee] = useState("");
+  const [editParentId, setEditParentId] = useState<string>("");
+  const [editRelationType, setEditRelationType] = useState<TaskRelationType | "NONE">("NONE");
+
   // 문서 요청 상태
   const [docRequestQuestion, setDocRequestQuestion] = useState("");
   const [docRequestApprover, setDocRequestApprover] = useState("");
@@ -569,6 +577,95 @@ export default function HomePage() {
     setNewParentId("");
     setNewRelationType("NONE");
     setSelectedId(newId);
+  };
+
+  // ---- 업무 수정 ----
+
+  const handleStartEdit = () => {
+    if (!selectedTask) return;
+
+    setEditTitle(selectedTask.title);
+    setEditDescription(selectedTask.description);
+    setEditAssignee(selectedTask.assignee || "");
+
+    // 현재 작업의 부모 관계 찾기
+    const parentRelation = relations.find(
+      (rel) => rel.toTaskId === selectedTask.id && rel.type !== "RELATED"
+    );
+
+    if (parentRelation) {
+      setEditParentId(parentRelation.fromTaskId);
+      setEditRelationType(parentRelation.type);
+    } else {
+      setEditParentId("");
+      setEditRelationType("NONE");
+    }
+
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedTask || !editTitle.trim()) return;
+
+    const now = new Date();
+    const oldAssignee = selectedTask.assignee;
+
+    // 작업 업데이트
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === selectedTask.id
+          ? {
+              ...t,
+              title: editTitle.trim(),
+              description: editDescription.trim() || "(설명 없음)",
+              assignee: editAssignee.trim() || undefined,
+              updatedAt: now.toISOString(),
+            }
+          : t
+      )
+    );
+
+    // 기존 부모 관계 제거 (RELATED는 제외)
+    setRelations((prev) =>
+      prev.filter(
+        (rel) => !(rel.toTaskId === selectedTask.id && rel.type !== "RELATED")
+      )
+    );
+
+    // 새 부모 관계 추가
+    if (editParentId && editRelationType !== "NONE") {
+      const rel: TaskRelation = {
+        id: `rel-${editParentId}-${selectedTask.id}-${editRelationType}-${now.getTime()}`,
+        fromTaskId: editParentId,
+        toTaskId: selectedTask.id,
+        type: editRelationType,
+      };
+      setRelations((prev) => [...prev, rel]);
+    }
+
+    // 담당자가 변경되었고 새 담당자가 있으면 알림
+    if (editAssignee && editAssignee !== oldAssignee) {
+      const notification: Notification = {
+        id: `task-reassigned-${now.getTime()}`,
+        userId: editAssignee,
+        taskId: selectedTask.id,
+        message: `작업이 재배정되었습니다: "${editTitle.trim()}" (ID: ${selectedTask.id})`,
+        createdAt: now.toISOString(),
+        type: "task",
+      };
+      setNotifications((prev) => [notification, ...prev]);
+    }
+
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditTitle("");
+    setEditDescription("");
+    setEditAssignee("");
+    setEditParentId("");
+    setEditRelationType("NONE");
   };
 
   // ---- 문서 정보 요청 제출 ----
@@ -1009,8 +1106,27 @@ export default function HomePage() {
                   minHeight: 0,
                 }}
               >
-              <div style={sectionTitleStyle}>업무 로그</div>
-              {selectedTask && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={sectionTitleStyle}>업무 로그</div>
+                {selectedTask && !isEditing && (
+                  <button
+                    onClick={handleStartEdit}
+                    style={{
+                      border: "1px solid #8b5cf6",
+                      borderRadius: 999,
+                      padding: "4px 12px",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      background: "white",
+                      color: "#8b5cf6",
+                      cursor: "pointer",
+                    }}
+                  >
+                    업무 수정
+                  </button>
+                )}
+              </div>
+              {selectedTask && !isEditing && (
                 <>
                   <textarea
                     value={logDraft}
@@ -1047,6 +1163,158 @@ export default function HomePage() {
                     로그 추가
                   </button>
                 </>
+              )}
+
+              {/* 업무 수정 폼 */}
+              {selectedTask && isEditing && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                      제목
+                    </label>
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        fontSize: 13,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                      설명
+                    </label>
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      rows={3}
+                      style={{
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        fontSize: 13,
+                        outline: "none",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                      담당자
+                    </label>
+                    <input
+                      type="text"
+                      value={editAssignee}
+                      onChange={(e) => setEditAssignee(e.target.value)}
+                      placeholder="담당자 이름"
+                      style={{
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        fontSize: 13,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                      부모 업무
+                    </label>
+                    <select
+                      value={editParentId}
+                      onChange={(e) => setEditParentId(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: 8,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        fontSize: 13,
+                        outline: "none",
+                      }}
+                    >
+                      <option value="">없음</option>
+                      {tasks
+                        .filter((t) => t.id !== selectedTask.id)
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.id}: {t.title}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {editParentId && (
+                    <div>
+                      <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 4 }}>
+                        관계 유형
+                      </label>
+                      <select
+                        value={editRelationType}
+                        onChange={(e) =>
+                          setEditRelationType(e.target.value as TaskRelationType | "NONE")
+                        }
+                        style={{
+                          width: "100%",
+                          padding: 8,
+                          borderRadius: 8,
+                          border: "1px solid #e5e7eb",
+                          fontSize: 13,
+                          outline: "none",
+                        }}
+                      >
+                        <option value="BLOCKS">BLOCKS (차단)</option>
+                        <option value="DEPENDS_ON">DEPENDS_ON (의존)</option>
+                        <option value="SUBTASK">SUBTASK (하위 작업)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button
+                      onClick={handleSaveEdit}
+                      style={{
+                        flex: 1,
+                        padding: "8px 16px",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      style={{
+                        flex: 1,
+                        padding: "8px 16px",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: "#6b7280",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
               )}
 
               <div
