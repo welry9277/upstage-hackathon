@@ -550,6 +550,19 @@ export default function HomePage() {
       setRelations((prev) => [...prev, rel]);
     }
 
+    // 담당자가 있으면 알림 생성
+    if (newTask.assignee) {
+      const notification: Notification = {
+        id: `new-task-${now.getTime()}`,
+        userId: newTask.assignee,
+        taskId: newTask.id,
+        message: `새로운 작업이 배정되었습니다: "${newTask.title}" (ID: ${newTask.id})`,
+        createdAt: now.toISOString(),
+        type: "task",
+      };
+      setNotifications((prev) => [notification, ...prev]);
+    }
+
     setNewTitle("");
     setNewDescription("");
     setNewAssignee("");
