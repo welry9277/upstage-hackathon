@@ -213,6 +213,11 @@ export default function HomePage() {
   } | null>(null);
   const [isSubmittingDocRequest, setIsSubmittingDocRequest] = useState(false);
 
+  // 문서 요청 모달 상태
+  const [selectedDocRequest, setSelectedDocRequest] = useState<Notification | null>(null);
+  const [docAnswer, setDocAnswer] = useState("");
+  const [searchedDocs, setSearchedDocs] = useState<any[]>([]);
+
   const selectedTask: Task | null =
     tasks.find((t) => t.id === selectedId) ?? null;
 
@@ -549,9 +554,28 @@ export default function HomePage() {
       const data = await response.json();
 
       if (data.success) {
+        // 승인자에게 알림 추가
+        const newNotification: Notification = {
+          id: `doc-req-${Date.now()}`,
+          userId: docRequestApprover,
+          message: `${currentUser}님이 문서 정보를 요청했습니다: "${docRequestQuestion.substring(0, 50)}${docRequestQuestion.length > 50 ? '...' : ''}"`,
+          createdAt: new Date().toISOString(),
+          type: "document_request",
+          documentRequest: {
+            id: data.request.id,
+            requester_email: `${currentUser.toLowerCase().replace(/\s+/g, "")}@company.com`,
+            requester_name: currentUser,
+            question: docRequestQuestion,
+            status: "pending",
+            createdAt: new Date().toISOString(),
+          },
+        };
+
+        setNotifications((prev) => [newNotification, ...prev]);
+
         setDocRequestMessage({
           type: "success",
-          text: `${docRequestApprover}에게 질문이 전송되었습니다. 문서 검색 후 답변 예정입니다.`,
+          text: `${docRequestApprover}에게 질문이 전송되었습니다.`,
         });
         setDocRequestQuestion("");
         setDocRequestApprover("");
@@ -1166,12 +1190,18 @@ export default function HomePage() {
                     userNotifications.map((n) => (
                       <div
                         key={n.id}
+                        onClick={() => {
+                          if (n.type === "document_request") {
+                            setSelectedDocRequest(n);
+                          }
+                        }}
                         style={{
                           marginBottom: 8,
                           padding: 8,
                           borderRadius: 10,
-                          border: "1px solid #e5e7eb",
-                          background: "#fefce8",
+                          border: `1px solid ${n.type === "document_request" ? "#a78bfa" : "#e5e7eb"}`,
+                          background: n.type === "document_request" ? "rgba(139, 92, 246, 0.1)" : "#fefce8",
+                          cursor: n.type === "document_request" ? "pointer" : "default",
                         }}
                       >
                         <div>{n.message}</div>
@@ -1182,8 +1212,13 @@ export default function HomePage() {
                             marginTop: 4,
                           }}
                         >
-                          작업: {n.taskId} ·{" "}
+                          {n.taskId ? `작업: ${n.taskId} · ` : ""}
                           {new Date(n.createdAt).toLocaleString()}
+                          {n.type === "document_request" && (
+                            <span style={{ marginLeft: 8, color: "#8b5cf6", fontWeight: 500 }}>
+                              클릭하여 답변하기
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))
@@ -1316,6 +1351,247 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* 문서 요청 답변 모달 */}
+      {selectedDocRequest && selectedDocRequest.documentRequest && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+          onClick={() => setSelectedDocRequest(null)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 16,
+              width: "90%",
+              maxWidth: 1200,
+              height: "80%",
+              display: "flex",
+              overflow: "hidden",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 왼쪽: Q&A 영역 */}
+            <div
+              style={{
+                flex: 1,
+                padding: 24,
+                display: "flex",
+                flexDirection: "column",
+                borderRight: "1px solid #e5e7eb",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                  문서 정보 요청
+                </h2>
+                <button
+                  onClick={() => setSelectedDocRequest(null)}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    fontSize: 24,
+                    cursor: "pointer",
+                    color: "#6b7280",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* 채팅 스타일 Q&A */}
+              <div style={{ flex: 1, overflowY: "auto", marginBottom: 20 }}>
+                {/* 질문 */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>
+                    {selectedDocRequest.documentRequest.requester_name} 님의 질문
+                  </div>
+                  <div
+                    style={{
+                      background: "#f3f4f6",
+                      padding: 12,
+                      borderRadius: 12,
+                      fontSize: 14,
+                      color: "#111827",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {selectedDocRequest.documentRequest.question}
+                  </div>
+                </div>
+
+                {/* 답변 작성 */}
+                <div>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>
+                    답변 작성
+                  </div>
+                  <textarea
+                    value={docAnswer}
+                    onChange={(e) => setDocAnswer(e.target.value)}
+                    placeholder="답변을 작성하세요..."
+                    rows={6}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                      fontSize: 14,
+                      outline: "none",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* 하단 버튼 */}
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  onClick={() => {
+                    console.log("답변 전송:", docAnswer);
+                    setSelectedDocRequest(null);
+                    setDocAnswer("");
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "12px 24px",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  답변 전송
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedDocRequest(null);
+                    setDocAnswer("");
+                  }}
+                  style={{
+                    padding: "12px 24px",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    background: "#ef4444",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  거절
+                </button>
+              </div>
+            </div>
+
+            {/* 오른쪽: 문서 검색 결과 */}
+            <div
+              style={{
+                flex: 1,
+                padding: 24,
+                background: "#f9fafb",
+                overflowY: "auto",
+              }}
+            >
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", marginTop: 0, marginBottom: 16 }}>
+                관련 문서 검색 결과
+              </h3>
+
+              {/* Mock 문서 리스트 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div
+                  style={{
+                    background: "white",
+                    padding: 16,
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    setSearchedDocs(prev =>
+                      prev.includes("doc1")
+                        ? prev.filter(id => id !== "doc1")
+                        : [...prev, "doc1"]
+                    );
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={searchedDocs.includes("doc1")}
+                      onChange={() => {}}
+                      style={{ marginRight: 8 }}
+                    />
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
+                      2024_Q4_예산_보고서.pdf
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
+                    "...마케팅 비용은 <mark>1.5억원</mark>으로 책정되었습니다. 전체 예산의 30%를 차지하며..."
+                  </div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
+                    페이지 2 · 관련도: 95%
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: "white",
+                    padding: 16,
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    setSearchedDocs(prev =>
+                      prev.includes("doc2")
+                        ? prev.filter(id => id !== "doc2")
+                        : [...prev, "doc2"]
+                    );
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={searchedDocs.includes("doc2")}
+                      onChange={() => {}}
+                      style={{ marginRight: 8 }}
+                    />
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
+                      마케팅_캠페인_결과_분석.xlsx
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
+                    "...총 <mark>광고비</mark> 집행 내역: 디지털 마케팅 8천만원, TV광고 7천만원..."
+                  </div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
+                    시트 1 · 관련도: 82%
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, fontSize: 12, color: "#6b7280" }}>
+                💡 체크박스를 선택하면 해당 문서가 답변의 근거로 포함됩니다.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

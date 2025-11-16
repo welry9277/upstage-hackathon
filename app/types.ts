@@ -31,9 +31,29 @@ export interface TaskLog {
 export interface Notification {
   id: string;
   userId: string;        // 알림 받을 사용자 (여기선 assignee 이름 그대로 씀)
-  taskId: string;
+  taskId?: string;
   message: string;
   createdAt: string;     // ISO
+  type?: "task" | "document_request"; // 알림 타입
+  documentRequest?: DocumentRequest;  // 문서 요청 데이터
+}
+
+export interface DocumentRequest {
+  id: string;
+  requester_email: string;
+  requester_name: string;
+  question: string;
+  status: "pending" | "answered" | "rejected";
+  answer?: string;
+  sources?: DocumentSource[];
+  createdAt: string;
+}
+
+export interface DocumentSource {
+  id: string;
+  fileName: string;
+  content: string;
+  selected: boolean;
 }
 
 /**
