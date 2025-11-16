@@ -330,58 +330,68 @@ export default function HomePage() {
           const dimOthers =
             highlightedNodeIds.size > 0 && !isHighlighted;
 
-          // 상태별 배경색 설정
+          // 상태별 배경색 설정 (하이라이트 여부와 관계없이 상태 색상 유지)
           let backgroundColor: string;
           let borderColor: string;
+          let highlightBorderColor: string; // 하이라이트 시 테두리 색상
+          let highlightShadowColor: string; // 하이라이트 시 그림자 색상
 
-          if (isHighlighted) {
-            // 하이라이트된 경우 기존 파란색 유지
-            backgroundColor = "linear-gradient(135deg, #2563eb, #4f46e5)";
-            borderColor = "rgba(191,219,254,0.9)";
-          } else {
-            // 상태별 색상
-            switch (t.status) {
-              case "TODO":
-                backgroundColor = "#f3f4f6"; // 옅은 회색
-                borderColor = "rgba(209,213,219,0.8)";
-                break;
-              case "IN_PROGRESS":
-                backgroundColor = "#dbeafe"; // 옅은 하늘색
-                borderColor = "rgba(147,197,253,0.8)";
-                break;
-              case "DONE":
-                backgroundColor = "#d1fae5"; // 옅은 초록색
-                borderColor = "rgba(110,231,183,0.8)";
-                break;
-              default:
-                backgroundColor = "#0f172a";
-                borderColor = "rgba(148,163,184,0.5)";
-            }
+          // 상태별 기본 색상 설정
+          switch (t.status) {
+            case "TODO":
+              backgroundColor = "#f3f4f6"; // 옅은 회색
+              borderColor = "rgba(209,213,219,0.8)";
+              highlightBorderColor = "rgba(59,130,246,0.9)"; // 하이라이트 시 파란색 테두리
+              highlightShadowColor = "rgba(59,130,246,0.25)"; // 하이라이트 시 그림자
+              break;
+            case "IN_PROGRESS":
+              backgroundColor = "#bfdbfe"; // 진한 하늘색
+              borderColor = "rgba(96,165,250,0.8)";
+              highlightBorderColor = "rgba(59,130,246,0.9)"; // 하이라이트 시 파란색 테두리
+              highlightShadowColor = "rgba(59,130,246,0.25)"; // 하이라이트 시 그림자
+              break;
+            case "DONE":
+              backgroundColor = "#d1fae5"; // 옅은 초록색
+              borderColor = "rgba(110,231,183,0.8)";
+              highlightBorderColor = "rgba(34,197,94,0.9)"; // 하이라이트 시 초록색 테두리
+              highlightShadowColor = "rgba(34,197,94,0.25)"; // 하이라이트 시 그림자
+              break;
+            default:
+              backgroundColor = "#0f172a";
+              borderColor = "rgba(148,163,184,0.5)";
+              highlightBorderColor = "rgba(148,163,184,0.9)";
+              highlightShadowColor = "rgba(148,163,184,0.25)";
           }
 
+          // 하이라이트 시 사용할 테두리 색상
+          const finalBorderColor = isHighlighted ? highlightBorderColor : borderColor;
+
           // 텍스트 색상 (밝은 배경에는 어두운 텍스트)
-          const textColor = isHighlighted ? "#e5e7eb" : "#111827";
+          const textColor = "#111827"; // 상태 색상이 밝으므로 항상 어두운 텍스트
+
+          // 노드 스타일 객체 생성
+          const nodeStyle: React.CSSProperties = {
+            borderRadius: 999,
+            padding: "6px 14px",
+            backgroundColor: backgroundColor, // 상태별 색상 유지
+            color: textColor,
+            fontSize: 12,
+            border: isHighlighted
+              ? `2px solid ${finalBorderColor}` // 하이라이트 시 더 두꺼운 테두리
+              : `1px solid ${finalBorderColor}`,
+            boxShadow: isHighlighted
+              ? `0 0 0 2px ${highlightShadowColor}, 0 10px 25px rgba(15,23,42,0.7)` // 하이라이트 시 강한 그림자
+              : "0 8px 18px rgba(15,23,42,0.6)",
+            opacity: dimOthers ? 0.3 : 1,
+            fontWeight: isHighlighted ? 600 : 500, // 하이라이트 시 더 굵게
+            cursor: "pointer",
+          };
 
           nodes.push({
             id: t.id,
             position: { x: idx * xGap, y: lv * yGap },
-            data: { label: `${t.id}` },
-            style: {
-              borderRadius: 999,
-              padding: "6px 14px",
-              background: backgroundColor,
-              color: textColor,
-              fontSize: 12,
-              border: isHighlighted
-                ? `2px solid ${borderColor}`
-                : `1px solid ${borderColor}`,
-              boxShadow: isHighlighted
-                ? "0 0 0 1px rgba(191,219,254,0.4), 0 10px 25px rgba(15,23,42,0.7)"
-                : "0 8px 18px rgba(15,23,42,0.6)",
-              opacity: dimOthers ? 0.3 : 1,
-              fontWeight: 500,
-              cursor: "pointer",
-            },
+            data: { label: t.title },
+            style: nodeStyle,
           });
         });
       });
