@@ -218,6 +218,51 @@ export default function HomePage() {
   const [docAnswer, setDocAnswer] = useState("");
   const [searchedDocs, setSearchedDocs] = useState<any[]>([]);
 
+  // 자동 답변 생성 함수
+  const generateAutoAnswer = (question: string) => {
+    // Mock 문서 데이터
+    const mockDocs = [
+      {
+        id: "doc1",
+        fileName: "2024_Q4_예산_보고서.pdf",
+        content: "마케팅 비용은 1.5억원으로 책정되었습니다. 전체 예산의 30%를 차지하며",
+        page: 2,
+        relevance: 95,
+      },
+      {
+        id: "doc2",
+        fileName: "마케팅_캠페인_결과_분석.xlsx",
+        content: "총 광고비 집행 내역: 디지털 마케팅 8천만원, TV광고 7천만원",
+        page: 1,
+        relevance: 82,
+      },
+    ];
+
+    // 질문에 따른 자동 답변 생성
+    const answer = `안녕하세요, ${question}에 대한 답변입니다.
+
+검색된 관련 문서를 바탕으로 다음과 같이 안내드립니다:
+
+1. ${mockDocs[0].fileName} (페이지 ${mockDocs[0].page})에 따르면:
+   "${mockDocs[0].content}"
+
+2. ${mockDocs[1].fileName}에서 확인한 내용:
+   "${mockDocs[1].content}"
+
+추가로 필요하신 정보가 있으시면 말씀해주세요.
+
+감사합니다.`;
+
+    return answer;
+  };
+
+  // 모달 닫기 헬퍼 함수
+  const closeDocRequestModal = () => {
+    setSelectedDocRequest(null);
+    setDocAnswer("");
+    setSearchedDocs([]);
+  };
+
   const selectedTask: Task | null =
     tasks.find((t) => t.id === selectedId) ?? null;
 
@@ -1191,8 +1236,13 @@ export default function HomePage() {
                       <div
                         key={n.id}
                         onClick={() => {
-                          if (n.type === "document_request") {
+                          if (n.type === "document_request" && n.documentRequest) {
                             setSelectedDocRequest(n);
+                            // 자동 답변 생성
+                            const autoAnswer = generateAutoAnswer(n.documentRequest.question);
+                            setDocAnswer(autoAnswer);
+                            // 문서 선택 초기화
+                            setSearchedDocs(["doc1", "doc2"]); // 기본으로 모든 문서 선택
                           }
                         }}
                         style={{
@@ -1368,7 +1418,7 @@ export default function HomePage() {
             zIndex: 1000,
             padding: 20,
           }}
-          onClick={() => setSelectedDocRequest(null)}
+          onClick={closeDocRequestModal}
         >
           <div
             style={{
@@ -1398,7 +1448,7 @@ export default function HomePage() {
                   문서 정보 요청
                 </h2>
                 <button
-                  onClick={() => setSelectedDocRequest(null)}
+                  onClick={closeDocRequestModal}
                   style={{
                     border: "none",
                     background: "none",
@@ -1461,8 +1511,9 @@ export default function HomePage() {
                 <button
                   onClick={() => {
                     console.log("답변 전송:", docAnswer);
-                    setSelectedDocRequest(null);
-                    setDocAnswer("");
+                    console.log("선택된 문서:", searchedDocs);
+                    // TODO: API 호출하여 답변 저장
+                    closeDocRequestModal();
                   }}
                   style={{
                     flex: 1,
@@ -1480,8 +1531,9 @@ export default function HomePage() {
                 </button>
                 <button
                   onClick={() => {
-                    setSelectedDocRequest(null);
-                    setDocAnswer("");
+                    console.log("요청 거절");
+                    // TODO: API 호출하여 거절 처리
+                    closeDocRequestModal();
                   }}
                   style={{
                     padding: "12px 24px",
