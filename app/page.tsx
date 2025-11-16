@@ -1238,9 +1238,13 @@ export default function HomePage() {
                         onClick={() => {
                           if (n.type === "document_request" && n.documentRequest) {
                             setSelectedDocRequest(n);
-                            // 자동 답변 생성
-                            const autoAnswer = generateAutoAnswer(n.documentRequest.question);
-                            setDocAnswer(autoAnswer);
+                            // 답변이 이미 있으면 답변 표시, 없으면 자동 생성
+                            if (n.documentRequest.answer) {
+                              setDocAnswer(n.documentRequest.answer);
+                            } else {
+                              const autoAnswer = generateAutoAnswer(n.documentRequest.question);
+                              setDocAnswer(autoAnswer);
+                            }
                             // 문서 선택 초기화
                             setSearchedDocs(["doc1", "doc2"]); // 기본으로 모든 문서 선택
                           }
@@ -1264,9 +1268,13 @@ export default function HomePage() {
                         >
                           {n.taskId ? `작업: ${n.taskId} · ` : ""}
                           {new Date(n.createdAt).toLocaleString()}
-                          {n.type === "document_request" && (
+                          {n.type === "document_request" && n.documentRequest && (
                             <span style={{ marginLeft: 8, color: "#8b5cf6", fontWeight: 500 }}>
-                              클릭하여 답변하기
+                              {n.documentRequest.status === "pending"
+                                ? "클릭하여 답변하기"
+                                : n.documentRequest.status === "answered"
+                                ? "클릭하여 답변 보기"
+                                : "클릭하여 상세보기"}
                             </span>
                           )}
                         </div>
@@ -1482,16 +1490,27 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* 답변 작성 */}
+                {/* 답변 작성/보기 */}
                 <div>
                   <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>
-                    답변 작성
+                    {selectedDocRequest.documentRequest.status === "answered"
+                      ? "답변 내용"
+                      : selectedDocRequest.documentRequest.status === "rejected"
+                      ? "거절됨"
+                      : "답변 작성"}
+                    {selectedDocRequest.documentRequest.status === "answered" && (
+                      <span style={{ marginLeft: 8, color: "#10b981", fontWeight: 600 }}>✓ 답변 완료</span>
+                    )}
+                    {selectedDocRequest.documentRequest.status === "rejected" && (
+                      <span style={{ marginLeft: 8, color: "#ef4444", fontWeight: 600 }}>✗ 거절됨</span>
+                    )}
                   </div>
                   <textarea
                     value={docAnswer}
                     onChange={(e) => setDocAnswer(e.target.value)}
                     placeholder="답변을 작성하세요..."
                     rows={6}
+                    readOnly={selectedDocRequest.documentRequest.status !== "pending"}
                     style={{
                       width: "100%",
                       padding: 12,
@@ -1501,6 +1520,8 @@ export default function HomePage() {
                       outline: "none",
                       resize: "vertical",
                       fontFamily: "inherit",
+                      background: selectedDocRequest.documentRequest.status !== "pending" ? "#f9fafb" : "white",
+                      cursor: selectedDocRequest.documentRequest.status !== "pending" ? "default" : "text",
                     }}
                   />
                 </div>
@@ -1508,46 +1529,114 @@ export default function HomePage() {
 
               {/* 하단 버튼 */}
               <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  onClick={() => {
-                    console.log("답변 전송:", docAnswer);
-                    console.log("선택된 문서:", searchedDocs);
-                    // TODO: API 호출하여 답변 저장
-                    closeDocRequestModal();
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "12px 24px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  답변 전송
-                </button>
-                <button
-                  onClick={() => {
-                    console.log("요청 거절");
-                    // TODO: API 호출하여 거절 처리
-                    closeDocRequestModal();
-                  }}
-                  style={{
-                    padding: "12px 24px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    background: "#ef4444",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  거절
-                </button>
+                {selectedDocRequest.documentRequest.status === "pending" ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (!selectedDocRequest?.documentRequest) return;
+
+                        const requesterName = selectedDocRequest.documentRequest.requester_name;
+
+                        // 질문자에게 답변 알림 생성
+                        const answerNotification: Notification = {
+                          id: `answer-${Date.now()}`,
+                          userId: requesterName,
+                          message: `${currentUser}님이 문서 요청에 답변했습니다: "${selectedDocRequest.documentRequest.question.substring(0, 30)}${selectedDocRequest.documentRequest.question.length > 30 ? '...' : ''}"`,
+                          createdAt: new Date().toISOString(),
+                          type: "document_request",
+                          documentRequest: {
+                            ...selectedDocRequest.documentRequest,
+                            status: "answered",
+                            answer: docAnswer,
+                          },
+                        };
+
+                        setNotifications((prev) => [answerNotification, ...prev]);
+
+                        // 원래 알림 제거 (선택사항)
+                        setNotifications((prev) =>
+                          prev.filter(n => n.id !== selectedDocRequest.id)
+                        );
+
+                        console.log("답변 전송:", docAnswer);
+                        console.log("선택된 문서:", searchedDocs);
+                        closeDocRequestModal();
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "12px 24px",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      답변 전송
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!selectedDocRequest?.documentRequest) return;
+
+                        const requesterName = selectedDocRequest.documentRequest.requester_name;
+
+                        // 질문자에게 거절 알림 생성
+                        const rejectNotification: Notification = {
+                          id: `reject-${Date.now()}`,
+                          userId: requesterName,
+                          message: `${currentUser}님이 문서 요청을 거절했습니다: "${selectedDocRequest.documentRequest.question.substring(0, 30)}${selectedDocRequest.documentRequest.question.length > 30 ? '...' : ''}"`,
+                          createdAt: new Date().toISOString(),
+                          type: "document_request",
+                          documentRequest: {
+                            ...selectedDocRequest.documentRequest,
+                            status: "rejected",
+                          },
+                        };
+
+                        setNotifications((prev) => [rejectNotification, ...prev]);
+
+                        // 원래 알림 제거
+                        setNotifications((prev) =>
+                          prev.filter(n => n.id !== selectedDocRequest.id)
+                        );
+
+                        console.log("요청 거절");
+                        closeDocRequestModal();
+                      }}
+                      style={{
+                        padding: "12px 24px",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        background: "#ef4444",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      거절
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={closeDocRequestModal}
+                    style={{
+                      flex: 1,
+                      padding: "12px 24px",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      background: "#6b7280",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    닫기
+                  </button>
+                )}
               </div>
             </div>
 
