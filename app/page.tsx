@@ -435,32 +435,21 @@ export default function HomePage() {
 
     const now = new Date();
 
-    const directNeighbors = getNeighbors(taskId, tasks, relations);
-    const parents = getParents(taskId, tasks, relations);
-    const parentNeighbors = parents.flatMap((p) =>
-      getNeighbors(p.id, tasks, relations)
-    );
-
-    const allTargets = [...directNeighbors, ...parentNeighbors].filter(
-      (t) => t.id !== taskId
-    );
-    const uniqueTargets = new Map<string, Task>();
-    allTargets.forEach((t) => uniqueTargets.set(t.id, t));
-
+    // 작업 완료 시 담당자에게 알림
     setNotifications((prev) => {
-      const newNotifs: Notification[] = [];
-      uniqueTargets.forEach((targetTask) => {
-        if (!targetTask.assignee) return;
-        const msg = `"${task.title}" (ID: ${task.id}) 작업이 완료되었습니다. 관련 작업: ${targetTask.id} (${targetTask.title}) 확인 필요`;
-        newNotifs.push({
-          id: `${now.getTime()}-${taskId}-${targetTask.id}`,
-          userId: targetTask.assignee,
-          taskId: targetTask.id,
-          message: msg,
-          createdAt: now.toISOString(),
-        });
-      });
-      return [...newNotifs, ...prev];
+      if (!task.assignee) return prev;
+
+      const msg = `"${task.title}" (ID: ${task.id}) 작업이 DONE 상태로 변경되었습니다.`;
+      const newNotif: Notification = {
+        id: `${now.getTime()}-${taskId}`,
+        userId: task.assignee,
+        taskId: task.id,
+        message: msg,
+        createdAt: now.toISOString(),
+        type: "task",
+      };
+
+      return [newNotif, ...prev];
     });
 
     const logs = logsByTask[taskId] ?? [];
