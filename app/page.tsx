@@ -1,9 +1,14 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import ReactFlow, {
   Node as FlowNode,
   Edge as FlowEdge,
+  ConnectionLineType,
+  Position,
+  NodeChange,
+  applyNodeChanges,
+  Handle,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -15,15 +20,64 @@ import {
   TaskLog,
   Notification,
   WebhookPayload,
+  Board,
 } from "./types";
+
+// Custom Node Component with Handles
+function CustomNode({ data }: { data: any }) {
+  return (
+    <div style={data.nodeStyle}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          width: 1,
+          height: 1,
+          minWidth: 1,
+          minHeight: 1,
+        }}
+      />
+      {data.label}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          width: 1,
+          height: 1,
+          minWidth: 1,
+          minHeight: 1,
+        }}
+      />
+    </div>
+  );
+}
+
+const nodeTypes = {
+  custom: CustomNode,
+};
 
 // ---- 초기 더미 데이터 ----
 
 const nowIso = () => new Date().toISOString();
 
+const initialBoards: Board[] = [
+  {
+    id: "board-1",
+    name: "메인 프로젝트",
+    description: "기본 작업 보드",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  },
+];
+
 const initialTasks: Task[] = [
   {
     id: "SCRUM-2",
+    boardId: "board-1",
     title: "작업 2 (메인 업무)",
     description: "백엔드 API 설계 및 기본 엔드포인트 구현",
     status: "IN_PROGRESS",
@@ -33,6 +87,7 @@ const initialTasks: Task[] = [
   },
   {
     id: "SCRUM-5",
+    boardId: "board-1",
     title: "Node.js 서비스 프로토타입 작성",
     description: "작업 관리용 Node.js 서비스 초안 구현",
     status: "TODO",
@@ -174,15 +229,95 @@ function statusPill(status: TaskStatus): React.CSSProperties {
 // ---- 메인 컴포넌트 ----
 
 export default function HomePage() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [relations, setRelations] =
-    useState<TaskRelation[]>(initialRelations);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialTasks[0]?.id ?? null
-  );
+  // localStorage에서 데이터 로드 (초기화 함수)
+  const loadBoards = (): Board[] => {
+    if (typeof window === "undefined") return initialBoards;
+    try {
+      const saved = localStorage.getItem("taskBoards");
+      return saved ? JSON.parse(saved) : initialBoards;
+    } catch {
+      return initialBoards;
+    }
+  };
 
-  const [logsByTask, setLogsByTask] = useState<Record<string, TaskLog[]>>({});
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const loadTasks = (): Task[] => {
+    if (typeof window === "undefined") return initialTasks;
+    try {
+      const saved = localStorage.getItem("taskTasks");
+      return saved ? JSON.parse(saved) : initialTasks;
+    } catch {
+      return initialTasks;
+    }
+  };
+
+  const loadRelations = (): TaskRelation[] => {
+    if (typeof window === "undefined") return initialRelations;
+    try {
+      const saved = localStorage.getItem("taskRelations");
+      return saved ? JSON.parse(saved) : initialRelations;
+    } catch {
+      return initialRelations;
+    }
+  };
+
+  const loadLogs = (): Record<string, TaskLog[]> => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem("taskLogs");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const loadNotifications = (): Notification[] => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem("taskNotifications");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const loadCurrentBoardId = (): string => {
+    if (typeof window === "undefined") return initialBoards[0]?.id || "";
+    try {
+      const saved = localStorage.getItem("currentBoardId");
+      return saved || initialBoards[0]?.id || "";
+    } catch {
+      return initialBoards[0]?.id || "";
+    }
+  };
+  
+  const [boards, setBoards] = useState<Board[]>(loadBoards);
+  const [currentBoardId, setCurrentBoardId] = useState<string>(loadCurrentBoardId);
+  
+  const [tasks, setTasks] = useState<Task[]>(loadTasks);
+  const [relations, setRelations] = useState<TaskRelation[]>(loadRelations);
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const loadedTasks = loadTasks();
+    return loadedTasks[0]?.id ?? null;
+  });
+
+  const [logsByTask, setLogsByTask] = useState<Record<string, TaskLog[]>>(loadLogs);
+  const [notifications, setNotifications] = useState<Notification[]>(loadNotifications);
+
+  // 데이터 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    try {
+      localStorage.setItem("taskBoards", JSON.stringify(boards));
+      localStorage.setItem("taskTasks", JSON.stringify(tasks));
+      localStorage.setItem("taskRelations", JSON.stringify(relations));
+      localStorage.setItem("taskLogs", JSON.stringify(logsByTask));
+      localStorage.setItem("taskNotifications", JSON.stringify(notifications));
+      localStorage.setItem("currentBoardId", currentBoardId);
+    } catch (error) {
+      console.error("Failed to save to localStorage:", error);
+    }
+  }, [boards, tasks, relations, logsByTask, notifications, currentBoardId]);
   
   // 알림 필터링 상태
   type NotificationFilter = "all" | "important" | "my_tasks" | "doc_requests" | "completed";
@@ -207,6 +342,26 @@ export default function HomePage() {
     useState<TaskRelationType | "NONE">("NONE");
 
   const [logDraft, setLogDraft] = useState("");
+  
+  // 노드 호버 상태 (다른 보드 연결 표시용)
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  // 노드 위치 저장 (taskId -> {x, y})
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem("nodePositions");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // 노드 위치 localStorage에 저장
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("nodePositions", JSON.stringify(nodePositions));
+  }, [nodePositions]);
 
   // 업무 수정 상태
   const [isEditing, setIsEditing] = useState(false);
@@ -275,8 +430,48 @@ export default function HomePage() {
     setSearchedDocs([]);
   };
 
+  // 현재 보드의 작업만 표시 (CROSS_BOARD로 연결된 다른 보드 작업은 그래프에 표시하지 않음)
+  const currentBoardTasks = useMemo(() => {
+    return tasks.filter((t) => t.boardId === currentBoardId);
+  }, [tasks, currentBoardId]);
+
+  // 현재 보드의 관계만 필터링 (CROSS_BOARD는 그래프에 표시하지 않음)
+  const currentBoardRelations = useMemo(() => {
+    return relations.filter((rel) => {
+      const fromTask = tasks.find((t) => t.id === rel.fromTaskId);
+      const toTask = tasks.find((t) => t.id === rel.toTaskId);
+      
+      // CROSS_BOARD 관계는 그래프에 표시하지 않음
+      if (rel.type === "CROSS_BOARD") {
+        return false;
+      }
+      
+      // 양쪽 작업이 모두 현재 보드에 있으면 포함
+      return fromTask?.boardId === currentBoardId && toTask?.boardId === currentBoardId;
+    });
+  }, [relations, tasks, currentBoardId]);
+
   const selectedTask: Task | null =
-    tasks.find((t) => t.id === selectedId) ?? null;
+    currentBoardTasks.find((t) => t.id === selectedId) ?? null;
+
+  // 호버된 노드의 다른 보드 연결 작업 찾기
+  const hoveredCrossBoardTasks = useMemo(() => {
+    if (!hoveredNodeId) return [];
+    
+    const connectedTaskIds = new Set<string>();
+    relations.forEach((rel) => {
+      if (rel.type === "CROSS_BOARD") {
+        if (rel.fromTaskId === hoveredNodeId) {
+          connectedTaskIds.add(rel.toTaskId);
+        }
+        if (rel.toTaskId === hoveredNodeId) {
+          connectedTaskIds.add(rel.fromTaskId);
+        }
+      }
+    });
+    
+    return tasks.filter((t) => connectedTaskIds.has(t.id) && t.boardId !== currentBoardId);
+  }, [hoveredNodeId, relations, tasks, currentBoardId]);
 
   // 승인자 목록 (기존 담당자 + 추가 승인자)
   const approverOptions = Array.from(
@@ -313,26 +508,60 @@ export default function HomePage() {
   // ---- 그래프 노드/엣지 ----
 
   const flowNodes: FlowNode[] = useMemo(() => {
-    const levels = computeLevels(tasks, relations);
-    const grouped = new Map<number, Task[]>();
+    const nodes: FlowNode[] = [];
+    const xGap = 300;
+    const yGap = 160;
+    const positions = new Map<string, { x: number; y: number }>();
 
-    tasks.forEach((t) => {
-      const lv = levels[t.id] ?? 0;
-      if (!grouped.has(lv)) grouped.set(lv, []);
-      grouped.get(lv)!.push(t);
+    // 부모 기준으로 자식 위치 계산 (재귀적으로)
+    const calculatePositions = (taskId: string, x: number, level: number): number => {
+      const y = level * yGap;
+      positions.set(taskId, { x, y });
+
+      // 이 노드의 자식들 찾기 (SUBTASK 관계)
+      const children = currentBoardRelations
+        .filter(rel => rel.type === "SUBTASK" && rel.fromTaskId === taskId)
+        .map(rel => rel.toTaskId);
+
+      if (children.length === 0) {
+        return x;
+      }
+
+      // 자식들을 재귀적으로 배치 (모든 자식은 동일한 level + 1에 배치)
+      let currentX = x - ((children.length - 1) * xGap) / 2;
+      children.forEach(childId => {
+        calculatePositions(childId, currentX, level + 1);
+        currentX += xGap;
+      });
+
+      return x;
+    };
+
+    // 루트 노드들 찾기 (SUBTASK의 부모가 없는 노드)
+    const rootNodes = currentBoardTasks.filter(t => {
+      return !currentBoardRelations.some(
+        rel => rel.type === "SUBTASK" && rel.toTaskId === t.id
+      );
     });
 
-    const nodes: FlowNode[] = [];
-    const xGap = 240;
-    const yGap = 160;
+    // 루트 노드들 배치
+    let startX = 0;
+    rootNodes.forEach(root => {
+      calculatePositions(root.id, startX, 0);
+      startX += xGap * 3;
+    });
 
-    Array.from(grouped.entries())
-      .sort(([a], [b]) => a - b)
-      .forEach(([lv, levelTasks]) => {
-        levelTasks.forEach((t, idx) => {
+    // 노드 생성
+    currentBoardTasks.forEach((t) => {
           const isHighlighted = highlightedNodeIds.has(t.id);
           const dimOthers =
             highlightedNodeIds.size > 0 && !isHighlighted;
+          
+          // CROSS_BOARD 연결이 있는지 확인 (🔗 아이콘 표시용)
+          const hasCrossBoardConnection = relations.some((rel) => 
+            rel.type === "CROSS_BOARD" && 
+            (rel.fromTaskId === t.id || rel.toTaskId === t.id)
+          );
 
           // 상태별 배경색 설정 (하이라이트 여부와 관계없이 상태 색상 유지)
           let backgroundColor: string;
@@ -405,6 +634,9 @@ export default function HomePage() {
             borderWidth = 2; // 하이라이트는 중간
           }
 
+          // 테두리 스타일 (일반적으로 solid)
+          const borderStyle = "solid";
+          
           // 노드 스타일 객체 생성
           const nodeStyle: React.CSSProperties = {
             borderRadius: 999,
@@ -412,7 +644,7 @@ export default function HomePage() {
             backgroundColor: backgroundColor, // 상태별 색상 유지
             color: textColor,
             fontSize: 12,
-            border: `${borderWidth}px solid ${finalBorderColor}`,
+            border: `${borderWidth}px ${borderStyle} ${finalBorderColor}`,
             boxShadow: isHighlighted
               ? `0 0 0 2px ${highlightShadowColor}, 0 10px 25px rgba(15,23,42,0.7)` // 하이라이트 시 강한 그림자
               : isImportant
@@ -421,23 +653,55 @@ export default function HomePage() {
             opacity: dimOthers ? 0.3 : 1,
             fontWeight: isHighlighted || isImportant ? 600 : 500, // 하이라이트 또는 중요 업무 시 더 굵게
             cursor: "pointer",
+            position: "relative" as const,
           };
+
+          // CROSS_BOARD 연결이 있으면 🔗 아이콘 표시
+          const label = hasCrossBoardConnection ? `🔗 ${t.title}` : t.title;
+
+          // 저장된 위치가 있으면 사용, 없으면 계산된 위치 사용
+          const savedPos = nodePositions[t.id];
+          const calculatedPos = positions.get(t.id) || { x: 0, y: 0 };
+          const pos = savedPos || calculatedPos;
 
           nodes.push({
             id: t.id,
-            position: { x: idx * xGap, y: lv * yGap },
-            data: { label: t.title },
-            style: nodeStyle,
+            type: 'custom',
+            position: pos,
+            data: {
+              label,
+              nodeStyle,
+            },
+            draggable: true,
           });
-        });
-      });
+    });
 
     return nodes;
-  }, [tasks, relations, highlightedNodeIds]);
+  }, [currentBoardTasks, currentBoardRelations, highlightedNodeIds, currentBoardId, relations, nodePositions]);
 
-  const flowEdges: FlowEdge[] = useMemo(
-    () =>
-      relations.map((rel) => {
+  const flowEdges: FlowEdge[] = useMemo(() => {
+    // flowNodes가 먼저 계산되어야 하므로, 노드 ID 집합을 별도로 계산
+    const nodeIds = new Set(currentBoardTasks.map((t) => t.id));
+    
+    return currentBoardRelations
+      .filter((rel) => {
+        // source와 target 노드가 모두 현재 그래프에 존재하는지 확인
+        const sourceExists = nodeIds.has(rel.fromTaskId);
+        const targetExists = nodeIds.has(rel.toTaskId);
+        
+        if (!sourceExists || !targetExists) {
+          console.warn(`Edge ${rel.id} references non-existent node:`, {
+            source: rel.fromTaskId,
+            target: rel.toTaskId,
+            sourceExists,
+            targetExists,
+          });
+          return false;
+        }
+        
+        return true;
+      })
+      .map((rel) => {
         const isHighlighted = highlightedEdgeIds.has(rel.id);
         const dimOthers =
           highlightedEdgeIds.size > 0 && !isHighlighted;
@@ -447,32 +711,26 @@ export default function HomePage() {
             ? "#38bdf8"
             : rel.type === "RELATED"
             ? "#a855f7"
+            : rel.type === "CROSS_BOARD"
+            ? "#fbbf24"
+            : rel.type === "CROSS_DEPT"
+            ? "#f97316"
             : "#f97316";
 
         return {
           id: rel.id,
           source: rel.fromTaskId,
           target: rel.toTaskId,
-          label: rel.type,
+          type: "default", // bezier curve
+          animated: false,
           style: {
             strokeWidth: isHighlighted ? 3 : 1.5,
             stroke: color,
             opacity: dimOthers ? 0.15 : 0.9,
           },
-          labelBgStyle: {
-            fill: "#020617",
-            stroke: "rgba(15,23,42,0.8)",
-            fillOpacity: 0.85,
-            strokeWidth: 0.5,
-          },
-          labelStyle: {
-            fontSize: 10,
-            fill: "#e5e7eb",
-          },
         };
-      }),
-    [relations, highlightedEdgeIds]
-  );
+      });
+  }, [currentBoardRelations, currentBoardTasks, highlightedEdgeIds]);
 
   // ---- 하위/관련 업무 ----
 
@@ -604,16 +862,53 @@ export default function HomePage() {
     setLogDraft("");
   };
 
+  // ---- 보드 관리 ----
+
+  const handleCreateBoard = () => {
+    const boardName = prompt("보드 이름을 입력하세요:");
+    if (!boardName?.trim()) return;
+
+    const now = new Date();
+    const newBoard: Board = {
+      id: `board-${now.getTime()}`,
+      name: boardName.trim(),
+      description: "",
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+
+    setBoards((prev) => [...prev, newBoard]);
+    setCurrentBoardId(newBoard.id);
+  };
+
+  const handleRenameBoard = () => {
+    const currentBoard = boards.find((b) => b.id === currentBoardId);
+    if (!currentBoard) return;
+
+    const newName = prompt("새 보드 이름을 입력하세요:", currentBoard.name);
+    if (!newName?.trim() || newName === currentBoard.name) return;
+
+    const now = new Date();
+    setBoards((prev) =>
+      prev.map((b) =>
+        b.id === currentBoardId
+          ? { ...b, name: newName.trim(), updatedAt: now.toISOString() }
+          : b
+      )
+    );
+  };
+
   // ---- 새 업무 추가 ----
 
   const handleAddTask = () => {
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || !currentBoardId) return;
 
     const now = new Date();
     const newId = `TASK-${now.getTime()}`;
 
     const newTask: Task = {
       id: newId,
+      boardId: currentBoardId,
       title: newTitle.trim(),
       description: newDescription.trim() || "(설명 없음)",
       status: "TODO",
@@ -625,11 +920,18 @@ export default function HomePage() {
     setTasks((prev) => [...prev, newTask]);
 
     if (newParentId && newRelationType !== "NONE") {
+      const parentTask = tasks.find((t) => t.id === newParentId);
+      // 다른 보드의 작업이면 자동으로 CROSS_BOARD로 설정
+      const isCrossBoard = parentTask && parentTask.boardId !== currentBoardId;
+      const finalRelationType = isCrossBoard ? "CROSS_BOARD" : newRelationType;
+      
       const rel: TaskRelation = {
-        id: `rel-${newParentId}-${newId}-${newRelationType}-${now.getTime()}`,
+        id: `rel-${newParentId}-${newId}-${finalRelationType}-${now.getTime()}`,
         fromTaskId: newParentId,
         toTaskId: newId,
-        type: newRelationType,
+        type: finalRelationType as TaskRelationType,
+        fromBoardId: parentTask?.boardId,
+        toBoardId: currentBoardId,
       };
       setRelations((prev) => [...prev, rel]);
     }
@@ -710,11 +1012,18 @@ export default function HomePage() {
 
     // 새 부모 관계 추가
     if (editParentId && editRelationType !== "NONE") {
+      const parentTask = tasks.find((t) => t.id === editParentId);
+      // 다른 보드의 작업이면 자동으로 CROSS_BOARD로 설정
+      const isCrossBoard = parentTask && parentTask.boardId !== selectedTask.boardId;
+      const finalRelationType = isCrossBoard ? "CROSS_BOARD" : editRelationType;
+      
       const rel: TaskRelation = {
-        id: `rel-${editParentId}-${selectedTask.id}-${editRelationType}-${now.getTime()}`,
+        id: `rel-${editParentId}-${selectedTask.id}-${finalRelationType}-${now.getTime()}`,
         fromTaskId: editParentId,
         toTaskId: selectedTask.id,
-        type: editRelationType,
+        type: finalRelationType as TaskRelationType,
+        fromBoardId: parentTask?.boardId,
+        toBoardId: selectedTask.boardId,
       };
       setRelations((prev) => [...prev, rel]);
     }
@@ -742,6 +1051,54 @@ export default function HomePage() {
     setEditAssignee("");
     setEditParentId("");
     setEditRelationType("NONE");
+  };
+
+  // ---- 노드 드래그 처리 ----
+
+  const handleNodesChange = (changes: NodeChange[]) => {
+    changes.forEach((change) => {
+      if (change.type === "position" && change.position && change.id) {
+        setNodePositions((prev) => ({
+          ...prev,
+          [change.id as string]: change.position!,
+        }));
+      }
+    });
+  };
+
+  // ---- 업무 삭제 ----
+
+  const handleDeleteTask = () => {
+    if (!selectedTask) return;
+
+    const confirmDelete = window.confirm(
+      `"${selectedTask.title}" (ID: ${selectedTask.id}) 업무를 삭제하시겠습니까?\n\n연결된 하위 업무와 관계도 함께 삭제됩니다.`
+    );
+
+    if (!confirmDelete) return;
+
+    const taskIdToDelete = selectedTask.id;
+
+    // 1. 해당 업무와 관련된 모든 관계 삭제
+    setRelations((prev) =>
+      prev.filter(
+        (rel) =>
+          rel.fromTaskId !== taskIdToDelete && rel.toTaskId !== taskIdToDelete
+      )
+    );
+
+    // 2. 해당 업무의 로그 삭제
+    setLogsByTask((prev) => {
+      const newLogs = { ...prev };
+      delete newLogs[taskIdToDelete];
+      return newLogs;
+    });
+
+    // 3. 해당 업무 삭제
+    setTasks((prev) => prev.filter((t) => t.id !== taskIdToDelete));
+
+    // 4. 선택 해제
+    setSelectedId(null);
   };
 
   // ---- 문서 정보 요청 제출 ----
@@ -911,8 +1268,58 @@ export default function HomePage() {
               marginBottom: 8,
             }}
           >
-            <div style={{ color: "#e5e7eb", fontWeight: 600, fontSize: 14 }}>
-              작업 그래프
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ color: "#e5e7eb", fontWeight: 600, fontSize: 14 }}>
+                작업 그래프
+              </div>
+              <select
+                value={currentBoardId}
+                onChange={(e) => setCurrentBoardId(e.target.value)}
+                style={{
+                  borderRadius: 6,
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  background: "rgba(15,23,42,0.6)",
+                  color: "#e5e7eb",
+                  cursor: "pointer",
+                }}
+              >
+                {boards.map((board) => (
+                  <option key={board.id} value={board.id}>
+                    {board.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleCreateBoard}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  background: "rgba(59,130,246,0.2)",
+                  color: "#93c5fd",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                + 새 보드
+              </button>
+              <button
+                onClick={handleRenameBoard}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  background: "rgba(148,163,184,0.2)",
+                  color: "#cbd5e1",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+                title="보드 이름 변경"
+              >
+                ✏️ 이름 변경
+              </button>
             </div>
             <div
               style={{
@@ -933,7 +1340,7 @@ export default function HomePage() {
                   display: "inline-block",
                 }}
               ></span>
-              노드를 클릭하면 연결 관계가 강조됩니다.
+              노드를 드래그하여 위치를 조정할 수 있습니다. 클릭하면 연결 관계가 강조됩니다.
             </div>
           </div>
 
@@ -947,14 +1354,84 @@ export default function HomePage() {
                 "radial-gradient(circle at top, #020617, #020617 60%, #030712 100%)",
             }}
           >
-            <ReactFlow
-              nodes={flowNodes}
-              edges={flowEdges}
-              fitView
-              onNodeClick={(_, node) =>
-                setSelectedId((prev) => (prev === node.id ? null : node.id))
-              }
-            />
+            <div style={{ position: "relative", width: "100%", height: "100%" }}>
+              <ReactFlow
+                nodes={flowNodes}
+                edges={flowEdges}
+                nodeTypes={nodeTypes}
+                onNodesChange={handleNodesChange}
+                fitView
+                minZoom={0.1}
+                maxZoom={2}
+                nodesDraggable={true}
+                proOptions={{ hideAttribution: true }}
+                onNodeMouseEnter={(_, node) => {
+                  setHoveredNodeId(node.id);
+                }}
+                onNodeMouseLeave={() => {
+                  setHoveredNodeId(null);
+                }}
+                onNodeClick={(_, node) => {
+                  const clickedTask = tasks.find((t) => t.id === node.id);
+                  setSelectedId((prev) => (prev === node.id ? null : node.id));
+                }}
+              />
+              {/* 호버 툴팁 - 다른 보드 연결 표시 */}
+              {hoveredNodeId && hoveredCrossBoardTasks.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    background: "rgba(15, 23, 42, 0.95)",
+                    border: "1px solid rgba(148, 163, 184, 0.3)",
+                    borderRadius: 8,
+                    padding: 12,
+                    zIndex: 1000,
+                    minWidth: 200,
+                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#e5e7eb", marginBottom: 8 }}>
+                    🔗 다른 보드 연결
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {hoveredCrossBoardTasks.map((task) => {
+                      const board = boards.find((b) => b.id === task.boardId);
+                      return (
+                        <div
+                          key={task.id}
+                          style={{
+                            fontSize: 11,
+                            color: "#cbd5e1",
+                            padding: "4px 8px",
+                            borderRadius: 4,
+                            background: "rgba(59, 130, 246, 0.1)",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setCurrentBoardId(task.boardId);
+                            setSelectedId(task.id);
+                            setHoveredNodeId(null);
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "rgba(59, 130, 246, 0.2)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "rgba(59, 130, 246, 0.1)";
+                          }}
+                        >
+                          <div style={{ fontWeight: 500 }}>{task.title}</div>
+                          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
+                            {board?.name || "다른 보드"} · {task.id}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1260,21 +1737,38 @@ export default function HomePage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={sectionTitleStyle}>업무 로그</div>
                 {selectedTask && !isEditing && (
-                  <button
-                    onClick={handleStartEdit}
-                    style={{
-                      border: "1px solid #8b5cf6",
-                      borderRadius: 999,
-                      padding: "4px 12px",
-                      fontSize: 11,
-                      fontWeight: 500,
-                      background: "white",
-                      color: "#8b5cf6",
-                      cursor: "pointer",
-                    }}
-                  >
-                    업무 수정
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={handleStartEdit}
+                      style={{
+                        border: "1px solid #8b5cf6",
+                        borderRadius: 999,
+                        padding: "4px 12px",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        background: "white",
+                        color: "#8b5cf6",
+                        cursor: "pointer",
+                      }}
+                    >
+                      업무 수정
+                    </button>
+                    <button
+                      onClick={handleDeleteTask}
+                      style={{
+                        border: "1px solid #ef4444",
+                        borderRadius: 999,
+                        padding: "4px 12px",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        background: "white",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                      }}
+                    >
+                      삭제
+                    </button>
+                  </div>
                 )}
               </div>
               {selectedTask && !isEditing && (
@@ -1384,7 +1878,16 @@ export default function HomePage() {
                     </label>
                     <select
                       value={editParentId}
-                      onChange={(e) => setEditParentId(e.target.value)}
+                      onChange={(e) => {
+                        setEditParentId(e.target.value);
+                        // 다른 보드의 작업을 선택하면 자동으로 CROSS_BOARD로 설정
+                        if (e.target.value && selectedTask) {
+                          const selectedParentTask = tasks.find((t) => t.id === e.target.value);
+                          if (selectedParentTask && selectedParentTask.boardId !== selectedTask.boardId) {
+                            setEditRelationType("CROSS_BOARD");
+                          }
+                        }
+                      }}
                       style={{
                         width: "100%",
                         padding: 8,
@@ -1397,11 +1900,16 @@ export default function HomePage() {
                       <option value="">없음</option>
                       {tasks
                         .filter((t) => t.id !== selectedTask.id)
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.id}: {t.title}
-                          </option>
-                        ))}
+                        .map((t) => {
+                          const board = boards.find((b) => b.id === t.boardId);
+                          const isCrossBoard = t.boardId !== selectedTask.boardId;
+                          return (
+                            <option key={t.id} value={t.id}>
+                              {isCrossBoard ? "🔗 " : ""}
+                              {t.id}: {t.title} {isCrossBoard ? `(${board?.name || "다른 보드"})` : ""}
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
 
@@ -1427,7 +1935,22 @@ export default function HomePage() {
                         <option value="BLOCKS">BLOCKS (차단)</option>
                         <option value="DEPENDS_ON">DEPENDS_ON (의존)</option>
                         <option value="SUBTASK">SUBTASK (하위 작업)</option>
+                        <option value="RELATED">RELATED (관련 업무)</option>
+                        <option value="CROSS_DEPT">CROSS_DEPT (유관부서)</option>
+                        <option value="CROSS_BOARD">CROSS_BOARD (보드 간 연결)</option>
                       </select>
+                      {editParentId && (() => {
+                        const parentTask = tasks.find((t) => t.id === editParentId);
+                        const isCrossBoard = parentTask && parentTask.boardId !== selectedTask.boardId;
+                        if (isCrossBoard) {
+                          return (
+                            <div style={{ fontSize: 11, color: "#3b82f6", marginTop: 4 }}>
+                              ℹ️ 다른 보드의 작업입니다. 자동으로 "보드 간 연결"로 설정됩니다.
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
 
@@ -1791,7 +2314,16 @@ export default function HomePage() {
                   </label>
                   <select
                     value={newParentId}
-                    onChange={(e) => setNewParentId(e.target.value)}
+                    onChange={(e) => {
+                      setNewParentId(e.target.value);
+                      // 다른 보드의 작업을 선택하면 자동으로 CROSS_BOARD로 설정
+                      if (e.target.value) {
+                        const selectedTask = tasks.find((t) => t.id === e.target.value);
+                        if (selectedTask && selectedTask.boardId !== currentBoardId) {
+                          setNewRelationType("CROSS_BOARD");
+                        }
+                      }
+                    }}
                     style={{
                       borderRadius: 8,
                       border: "1px solid #e5e7eb",
@@ -1800,11 +2332,16 @@ export default function HomePage() {
                     }}
                   >
                     <option value="">부모 없음 (독립 업무)</option>
-                    {tasks.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.id} - {t.title}
-                      </option>
-                    ))}
+                    {tasks.map((t) => {
+                      const board = boards.find((b) => b.id === t.boardId);
+                      const isCrossBoard = t.boardId !== currentBoardId;
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {isCrossBoard ? "🔗 " : ""}
+                          {t.id} - {t.title} {isCrossBoard ? `(${board?.name || "다른 보드"})` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
 
                   <select
@@ -1827,7 +2364,20 @@ export default function HomePage() {
                     <option value="CROSS_DEPT">
                       CROSS_DEPT (유관부서)
                     </option>
+                    <option value="CROSS_BOARD">CROSS_BOARD (보드 간 연결)</option>
                   </select>
+                  {newParentId && (() => {
+                    const parentTask = tasks.find((t) => t.id === newParentId);
+                    const isCrossBoard = parentTask && parentTask.boardId !== currentBoardId;
+                    if (isCrossBoard && newRelationType === "NONE") {
+                      return (
+                        <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                          ⚠️ 다른 보드의 작업입니다. "보드 간 연결"을 선택하세요.
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   <button
                     onClick={handleAddTask}

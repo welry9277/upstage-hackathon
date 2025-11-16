@@ -1,10 +1,19 @@
 // app/types.ts
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
-export type TaskRelationType = "SUBTASK" | "RELATED" | "CROSS_DEPT";
+export type TaskRelationType = "SUBTASK" | "RELATED" | "CROSS_DEPT" | "CROSS_BOARD";
+
+export interface Board {
+  id: string;            // 보드 ID
+  name: string;          // 보드 이름 (프로젝트 이름)
+  description?: string;  // 보드 설명
+  createdAt: string;     // ISO
+  updatedAt: string;     // ISO
+}
 
 export interface Task {
   id: string;            // 예: SCRUM-2
+  boardId: string;       // 속한 보드 ID
   title: string;
   description: string;
   status: TaskStatus;
@@ -19,6 +28,8 @@ export interface TaskRelation {
   fromTaskId: string;    // 기준 작업
   toTaskId: string;      // 연결된 작업
   type: TaskRelationType;
+  fromBoardId?: string;  // 보드 간 연결 시 사용
+  toBoardId?: string;    // 보드 간 연결 시 사용
 }
 
 export interface TaskLog {
