@@ -205,7 +205,7 @@ export default function HomePage() {
   const [logDraft, setLogDraft] = useState("");
 
   // 문서 요청 상태
-  const [docRequestKeyword, setDocRequestKeyword] = useState("");
+  const [docRequestQuestion, setDocRequestQuestion] = useState("");
   const [docRequestApprover, setDocRequestApprover] = useState("");
   const [docRequestMessage, setDocRequestMessage] = useState<{
     type: "success" | "error";
@@ -215,6 +215,11 @@ export default function HomePage() {
 
   const selectedTask: Task | null =
     tasks.find((t) => t.id === selectedId) ?? null;
+
+  // 승인자 목록 (기존 담당자 + 추가 승인자)
+  const approverOptions = Array.from(
+    new Set([...assigneeOptions, "재무팀", "인사팀", "마케팅팀", "IT보안팀"])
+  );
 
   // ---- 강조 대상 ----
 
@@ -514,13 +519,13 @@ export default function HomePage() {
     setSelectedId(newId);
   };
 
-  // ---- 문서 요청 제출 ----
+  // ---- 문서 정보 요청 제출 ----
 
   const handleDocumentRequest = async () => {
-    if (!docRequestKeyword.trim() || !docRequestApprover.trim()) {
+    if (!docRequestQuestion.trim() || !docRequestApprover) {
       setDocRequestMessage({
         type: "error",
-        text: "검색 키워드와 승인자 이메일을 입력해주세요.",
+        text: "질문 내용과 승인자를 선택해주세요.",
       });
       return;
     }
@@ -535,8 +540,8 @@ export default function HomePage() {
         body: JSON.stringify({
           requester_email: `${currentUser.toLowerCase().replace(/\s+/g, "")}@company.com`,
           requester_department: "개발팀",
-          keyword: docRequestKeyword,
-          approver_email: docRequestApprover,
+          keyword: docRequestQuestion,
+          approver_email: `${docRequestApprover.toLowerCase().replace(/\s+/g, "")}@company.com`,
           urgency: "normal",
         }),
       });
@@ -546,9 +551,9 @@ export default function HomePage() {
       if (data.success) {
         setDocRequestMessage({
           type: "success",
-          text: `요청 완료! ${data.matchingDocuments}개 문서 발견. 승인자에게 알림 전송됨.`,
+          text: `${docRequestApprover}에게 질문이 전송되었습니다. 문서 검색 후 답변 예정입니다.`,
         });
-        setDocRequestKeyword("");
+        setDocRequestQuestion("");
         setDocRequestApprover("");
       } else {
         setDocRequestMessage({
@@ -1004,97 +1009,119 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* 문서 요청 카드 */}
-              <div
-                style={{
-                  ...cardStyle,
-                  padding: 14,
-                  marginTop: 12,
-                }}
-              >
-                <div style={sectionTitleStyle}>문서 요청</div>
-                <p style={{ fontSize: 11, color: "#6b7280", margin: "4px 0 8px" }}>
-                  다른 부서의 문서가 필요할 때 요청하세요
-                </p>
+            </div>
 
-                {docRequestMessage && (
-                  <div
-                    style={{
-                      padding: 8,
-                      borderRadius: 8,
-                      marginBottom: 8,
-                      fontSize: 11,
-                      background:
-                        docRequestMessage.type === "success"
-                          ? "rgba(16, 185, 129, 0.1)"
-                          : "rgba(239, 68, 68, 0.1)",
-                      color:
-                        docRequestMessage.type === "success"
-                          ? "#065f46"
-                          : "#991b1b",
-                      border: `1px solid ${
-                        docRequestMessage.type === "success" ? "#10b981" : "#ef4444"
-                      }`,
-                    }}
-                  >
-                    {docRequestMessage.text}
-                  </div>
-                )}
+            {/* 문서 정보 요청 카드 */}
+            <div
+              style={{
+                ...cardStyle,
+                flex: 1,
+                padding: 14,
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+              }}
+            >
+              <div style={sectionTitleStyle}>문서 정보 요청</div>
+              <p style={{ fontSize: 11, color: "#6b7280", margin: "4px 0 10px" }}>
+                다른 부서에 문서 내용을 질문하세요
+              </p>
 
+              {docRequestMessage && (
                 <div
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 10,
+                    fontSize: 12,
+                    background:
+                      docRequestMessage.type === "success"
+                        ? "rgba(16, 185, 129, 0.1)"
+                        : "rgba(239, 68, 68, 0.1)",
+                    color:
+                      docRequestMessage.type === "success"
+                        ? "#065f46"
+                        : "#991b1b",
+                    border: `1px solid ${
+                      docRequestMessage.type === "success" ? "#10b981" : "#ef4444"
+                    }`,
                   }}
                 >
-                  <input
-                    value={docRequestKeyword}
-                    onChange={(e) => setDocRequestKeyword(e.target.value)}
-                    placeholder="검색 키워드 (예: 예산, 프로젝트)"
-                    style={{
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      padding: "6px 8px",
-                      fontSize: 12,
-                      outline: "none",
-                    }}
-                  />
-                  <input
-                    value={docRequestApprover}
-                    onChange={(e) => setDocRequestApprover(e.target.value)}
-                    placeholder="승인자 이메일"
-                    style={{
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      padding: "6px 8px",
-                      fontSize: 12,
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    onClick={handleDocumentRequest}
-                    disabled={isSubmittingDocRequest}
-                    style={{
-                      marginTop: 2,
-                      alignSelf: "flex-end",
-                      border: "none",
-                      borderRadius: 999,
-                      padding: "5px 14px",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      background: isSubmittingDocRequest
-                        ? "#9ca3af"
-                        : "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-                      color: "white",
-                      cursor: isSubmittingDocRequest ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isSubmittingDocRequest ? "요청 중..." : "문서 요청"}
-                  </button>
+                  {docRequestMessage.text}
                 </div>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>
+                  질문 또는 필요한 정보
+                </label>
+                <textarea
+                  value={docRequestQuestion}
+                  onChange={(e) => setDocRequestQuestion(e.target.value)}
+                  placeholder="예: Q4 예산 중 마케팅 비용이 얼마인가요?"
+                  rows={3}
+                  style={{
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    padding: "8px 10px",
+                    fontSize: 13,
+                    outline: "none",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                  }}
+                />
+
+                <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, marginTop: 4 }}>
+                  답변 받을 담당자
+                </label>
+                <select
+                  value={docRequestApprover}
+                  onChange={(e) => setDocRequestApprover(e.target.value)}
+                  style={{
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    padding: "8px 10px",
+                    fontSize: 13,
+                    outline: "none",
+                    background: "white",
+                  }}
+                >
+                  <option value="">담당자 선택...</option>
+                  {approverOptions.map((approver) => (
+                    <option key={approver} value={approver}>
+                      {approver}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={handleDocumentRequest}
+                  disabled={isSubmittingDocRequest}
+                  style={{
+                    marginTop: 6,
+                    border: "none",
+                    borderRadius: 999,
+                    padding: "8px 16px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: isSubmittingDocRequest
+                      ? "#9ca3af"
+                      : "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+                    color: "white",
+                    cursor: isSubmittingDocRequest ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isSubmittingDocRequest ? "전송 중..." : "질문 전송"}
+                </button>
               </div>
             </div>
+          </div>
 
             {/* 알림 + 새 업무 추가 */}
             <div
